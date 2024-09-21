@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import json
 from scipy.integrate import solve_ivp
 
 # クォータニオン微分を計算する関数
@@ -18,7 +19,7 @@ def quaternion_derivative(t, state, omega_target, Kp, Kd, inertia):
     torque = Kp * np.array([q_error[1], q_error[2], q_error[3]]) + Kd * omega_error
 
     # 角速度の更新（慣性モーメントを考慮）
-    omega_dot = np.linalg.inv(inertia).dot(torque) - np.cross(omega, inertia @ omega)
+    omega_dot = np.linalg.inv(inertia).dot(torque)
 
     # クォータニオンの微分
     q_dot = 0.5 * np.array([
@@ -73,6 +74,7 @@ next_output_time = dt_output
 # 結果を格納するためのリスト
 quaternion_history = []
 omega_history = []
+torque_history = []
 time_history = []
 
 # シミュレーションのループ
@@ -90,14 +92,41 @@ for t in np.arange(0, total_time, dt_simulation):
     quaternion_history.append(current_state[:4])
     omega_history.append(current_state[4:7])
 
-    # 出力の時間になった場合、クォータニオンを出力
+    # トルクを計算して記録
+    q_error = quaternion_error(current_state[:4], q_target)
+    torque = Kp * np.array([q_error[1], q_error[2], q_error[3]]) + Kd * (omega_target - current_state[4:7])
+    torque_history.append(torque)
+
+    # 出力の時間になった場合、値をJSON形式で出力
     if t + dt_simulation >= next_output_time:
-        q = current_state[:4]
-        print(f"Time: {next_output_time:.2f} s, Quaternion: {q}")
+
+        _quaternion = current_state[:4].tolist()
+        _angular_velocity = current_state[4:7].tolist()
+        _torque = torque.tolist()
+
+        output_data ={
+            "quaternion_i2b":{
+                "w":_quaternion[0],
+                "x":_quaternion[1],
+                "y":_quaternion[2],
+                "z":_quaternion[3]
+            },
+            "angular_velocity":{
+                "x":_angular_velocity[0],
+                "y":_angular_velocity[1],
+                "z":_angular_velocity[2]
+            },
+            "torque":{
+                "x":_torque[0],
+                "y":_torque[1],
+                "z":_torque[2]
+            }
+        }
+        print(json.dumps(output_data))
         next_output_time += dt_output
 
     # リアルタイム感を持たせる
-    time.sleep(dt_simulation)
+    #time.sleep(dt_simulation)
 
 # 時系列データをプロット
 quaternion_history = np.array(quaternion_history)
@@ -122,7 +151,7 @@ plt.grid(True)
 plt.subplot(2, 1, 2)
 plt.plot(time_history, omega_history[:, 0], label='ωx')
 plt.plot(time_history, omega_history[:, 1], label='ωy')
-plt.plot(time_history, omega_history[:, 2], label='ωz')  # 修正: omega_history[:, 2]に修正
+plt.plot(time_history, omega_history[:, 2], label='ωz')
 plt.title('Angular Velocity Time Series')
 plt.xlabel('Time [s]')
 plt.ylabel('Angular Velocity [rad/s]')
