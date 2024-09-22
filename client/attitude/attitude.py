@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import time
 import json
 from scipy.integrate import solve_ivp
+import write_db
 
 # クォータニオン微分を計算する関数
 def quaternion_derivative(t, state, omega_target, Kp, Kd, inertia):
@@ -50,20 +51,20 @@ def quaternion_multiply(q1, q2):
 q_initial = np.array([1, 0.5, 0.3, 0.1])  # 初期クォータニオン
 q_initial = q_initial / np.linalg.norm(q_initial)
 omega_initial = np.array([0.3, 0.2, 0.1])  # 初期角速度
-q_target = np.array([0, 0, 0, 1])  # 目標クォータニオン
+q_target = np.array([1, 0, 0, 0])  # 目標クォータニオン
 omega_target = np.array([0.0, 0.0, 0.0])   # 目標角速度
 
 # 慣性モーメント（対角行列の例）
 inertia = np.diag([1.0, 1.0, 1.0])  # 単位行列として仮定
 
 # 制御パラメータ
-Kp = 0.2  # Pゲイン
-Kd = 0.1  # Dゲイン
+Kp = 0.2/3  # Pゲイン
+Kd = 0.1/3  # Dゲイン
 
 # 時間ステップと総時間を設定
 dt_simulation = 0.01  # シミュレーションの刻み幅（秒）
 dt_output = 1.0       # 標準出力の間隔（秒）
-total_time = 100      # 総時間（秒）
+total_time = 300      # 総時間（秒）
 t_span = (0, total_time)
 initial_state = np.concatenate((q_initial, omega_initial))
 
@@ -76,6 +77,9 @@ quaternion_history = []
 omega_history = []
 torque_history = []
 time_history = []
+
+# DB書き込みインスタンス
+database = write_db.WriteDb()
 
 # シミュレーションのループ
 for t in np.arange(0, total_time, dt_simulation):
@@ -123,10 +127,16 @@ for t in np.arange(0, total_time, dt_simulation):
             }
         }
         print(json.dumps(output_data))
+        #""""
+        try:
+            database.write_bulk(output_data)
+        except:
+            print("writing error")
         next_output_time += dt_output
+        #"""
 
     # リアルタイム感を持たせる
-    #time.sleep(dt_simulation)
+    time.sleep(dt_simulation)
 
 # 時系列データをプロット
 quaternion_history = np.array(quaternion_history)
